@@ -323,30 +323,201 @@ ADD GHICHU VARCHAR(100),
 
 --2. Mã học viên là một chuỗi 5 ký tự, 3 ký tự đầu là mã lớp, 2 ký tự cuối cùng là số thứ tự học viên trong lớp. VD: “K1101”
 ALTER TABLE HOCVIEN
-ADD CONSTRAINT HV_KT_CHECK CHECK(MAHV = 
+ADD CONSTRAINT HV_KT_CHECK CHECK (MAHV LIKE MALOP +'[0-9][0-9]')
+
+
 --3. Thuộc tính GIOITINH chỉ có giá trị là “Nam” hoặc “Nu”.
+ALTER TABLE GIAOVIEN
+ADD CONSTRAINT GV_GT_CHECK CHECK(GIOITINH IN ('Nam', 'Nu'))
+
+ALTER TABLE HOCVIEN
+ADD CONSTRAINT HV_GT_CHECK CHECK(GIOITINH IN('Nam', 'Nu'))
+
 --4. Điểm số của một lần thi có giá trị từ 0 đến 10 và cần lưu đến 2 số lẽ (VD: 6.22).
+ALTER TABLE KETQUATHI 
+ADD CONSTRAINT KQ_DIEM_CHECK CHECK
+(
+	DIEM >=0 AND DIEM <=10
+	AND DIEM LIKE '%.[0-9][0-9]'
+)
+
 --5. Kết quả thi là “Dat” nếu điểm từ 5 đến 10 và “Khong dat” nếu điểm nhỏ hơn 5.
+ALTER TABLE KETQUATHI
+ADD CONSTRAINT KQ_KQUA_CHECK CHECK
+(
+	(KQUA = 'Dat' AND DIEM BETWEEN 5 AND 10)
+	OR (KQUA = 'Khong dat' AND DIEM < 5)
+)
+
 --6. Học viên thi một môn tối đa 3 lần.
+ALTER TABLE KETQUATHI 
+ADD CONSTRAINT KQ_LANTHI_CHECK CHECK(LANTHI <= 3)
+
 --7. Học kỳ chỉ có giá trị từ 1 đến 3.
+ALTER TABLE GIANGDAY
+ADD CONSTRAINT GD_HOCKY_CHECK CHECK(HOCKY BETWEEN 1 AND 3)
+
 --8. Học vị của giáo viên chỉ có thể là “CN”, “KS”, “Ths”, ”TS”, ”PTS”.
+ALTER TABLE GIAOVIEN
+ADD CONSTRAINT GV_HOCVI_CHECK CHECK(HOCVI IN('CN', 'KS', 'Ths', 'TS', 'PTS'))
+
 --9. Lớp trưởng của một lớp phải là học viên của lớp đó.
+ALTER TABLE LOP
+ADD CONSTRAINT LOP_TRLOP_CHECK CHECK (TRGLOP LIKE MALOP + '[0-9][0-9]')
+
 --10. Trưởng khoa phải là giáo viên thuộc khoa và có học vị “TS” hoặc “PTS”.
+ALTER TABLE KHOA
+ADD CONSTRAINT KHOA_TRGKHOA_CHECK CHECK
+( TRGKHOA IN 
+	(
+	SELECT GV.MAGV
+	FROM GIAOVIEN GV, KHOA
+	WHERE GV.MAKHOA= KHOA.MAKHOA 
+		AND GV.HOCVI IN ('TS', 'PTS')
+	)
+)
+
 --11. Học viên ít nhất là 18 tuổi.
+ALTER TABLE HOCVIEN 
+ADD CONSTRAINT HV_TUOI_CHECK CHECK(YEAR(GETDATE()) - YEAR(NGSINH) >= 18)
+
 --12. Giảng dạy một môn học ngày bắt đầu (TUNGAY) phải nhỏ hơn ngày kết thúc (DENNGAY).
+ALTER TABLE GIANGDAY 
+ADD CONSTRAINT GD_NGAYGD_CHECK CHECK(TUNGAY < DENNGAY)
+
 --13. Giáo viên khi vào làm ít nhất là 22 tuổi.
+ALTER TABLE GIAOVIEN
+ADD CONSTRAINT GV_TUOI_CHECK CHECK(YEAR(NGVL) - YEAR(NGSINH) >= 22)
+
 --14. Tất cả các môn học đều có số tín chỉ lý thuyết và tín chỉ thực hành chênh lệch nhau không quá 3
+ALTER TABLE MONHOC 
+ADD CONSTRAINT CHECK_TC_CHECK CHECK (ABS(TCLT - TCTH) <= 3)
 
 ------------------------------------------------------------------------------------
 			--II. Ngôn ngữ thao tác dữ liệu (Data Manipulation Language)--
 --1. Tăng hệ số lương thêm 0.2 cho những giáo viên là trưởng khoa.
---2. Cập nhật giá trị điểm trung bình tất cả các môn học (DIEMTB) của mỗi học viên (tất cả các môn học đều có hệ số 1 và nếu học viên thi một môn nhiều lần, chỉ lấy điểm của lần thi sau cùng).
---3. Cập nhật giá trị cho cột GHICHU là “Cam thi” đối với trường hợp: học viên có một môn bất kỳ thi lần thứ 3 dưới 5 điểm.
-/*4. Cập nhật giá trị cho cột XEPLOAI trong quan hệ HOCVIEN như sau:
-o Nếu DIEMTB >= 9 thì XEPLOAI =”XS”
-o Nếu 8 <= DIEMTB < 9 thì XEPLOAI = “G”
-o Nếu 6.5 <= DIEMTB < 8 thì XEPLOAI = “K”
-o Nếu 5 <= DIEMTB < 6.5 thì XEPLOAI = “TB”
-o Nếu DIEMTB < 5 thì XEPLOAI = ”Y 
-*/
+UPDATE GIAOVIEN
+SET HESO = 0.2 + HESO
+WHERE MAGV IN (SELECT TRGKHOA FROM KHOA)
 
+--2. Cập nhật giá trị điểm trung bình tất cả các môn học (DIEMTB) của mỗi học viên (tất cả các môn học đều có hệ số 1 và nếu học viên thi một môn nhiều lần, chỉ lấy điểm của lần thi sau cùng).
+UPDATE HOCVIEN
+SET DIEMTB = (
+	SELECT AVG(DIEM)
+	FROM KETQUATHI
+	WHERE LANTHI = (SELECT MAX(LANTHI)
+					FROM KETQUATHI KQ
+					WHERE MAHV = KETQUATHI.MAHV
+					GROUP BY MAHV)
+	GROUP BY MAHV
+	HAVING MAHV = HOCVIEN.MAHV
+)
+
+--3. Cập nhật giá trị cho cột GHICHU là “Cam thi” đối với trường hợp: học viên có một môn bất kỳ thi lần thứ 3 dưới 5 điểm.
+UPDATE HOCVIEN
+SET GHICHU = 'Cam thi'
+WHERE MAHV IN(
+	SELECT MAHV
+	FROM KETQUATHI
+	WHERE LANTHI = '3'
+		AND DIEM < '5'
+)
+
+--4. Cập nhật giá trị cho cột XEPLOAI trong quan hệ HOCVIEN như sau:
+--Nếu DIEMTB >= 9 thì XEPLOAI =”XS”
+--Nếu 8 <= DIEMTB < 9 thì XEPLOAI = “G”
+--Nếu 6.5 <= DIEMTB < 8 thì XEPLOAI = “K”
+--Nếu 5 <= DIEMTB < 6.5 thì XEPLOAI = “TB”
+--Nếu DIEMTB < 5 thì XEPLOAI = ”Y 
+UPDATE HOCVIEN
+SET XEPLOAI = (
+	CASE 
+		WHEN DIEMTB >= 9 THEN 'XS'
+		WHEN DIEMTB >= 8 AND DIEMTB < 9 THEN 'G'
+		WHEN DIEMTB >= 6.5 AND DIEMTB < 8 THEN 'K'
+		WHEN DIEMTB >= 5 AND DIEMTB < 6.5 THEN 'TB'
+		WHEN DIEMTB < 5 THEN 'Y'
+	END
+)
+-------------------------------------------------------------------------------------
+
+			--III. Ngôn ngữ truy vấn dữ liệu--
+--1. In ra danh sách (mã học viên, họ tên, ngày sinh, mã lớp) lớp trưởng của các lớp.
+SELECT HV.MAHV, HV.HO, HV.TEN, HV.NGSINH, HV.MALOP
+FROM HOCVIEN HV, LOP
+WHERE LOP.TRGLOP = HV.MAHV
+
+--2. In ra bảng điểm khi thi (mã học viên, họ tên , lần thi, điểm số) môn CTRR của lớp “K12”, sắp xếp theo tên, họ học viên.
+SELECT HV.MAHV, HV.HO, HV.TEN, KQ.LANTHI, KQ.DIEM
+FROM KETQUATHI KQ, HOCVIEN HV
+WHERE KQ.MAHV = HV.MAHV
+	AND KQ.MAMH = 'CTRR'
+	AND HV.MALOP = 'K12'
+ORDER BY HV.TEN, HV.HO
+
+--3. In ra danh sách những học viên (mã học viên, họ tên) và những môn học mà học viên đó thi lần thứ nhất đã đạt.
+SELECT HV.MAHV, HV.HO, HV.TEN, KQ.MAMH
+FROM HOCVIEN HV, KETQUATHI KQ
+WHERE KQ.MAHV = HV.MAHV
+	AND KQ.LANTHI = '1'
+	AND KQUA = 'Dat'
+
+--4. In ra danh sách học viên (mã học viên, họ tên) của lớp “K11” thi môn CTRR không đạt (ở lần thi 1).
+SELECT HV.MAHV, HV.HO, HV.TEN
+FROM HOCVIEN HV, KETQUATHI KQ
+WHERE KQ.MAHV = HV.MAHV	
+	AND HV.MALOP = 'K11'
+	AND KQ.MAMH = 'CTRR'
+	AND KQ.LANTHI = '1'
+	AND KQ.KQUA = 'Khong Dat'
+
+--5. * Danh sách học viên (mã học viên, họ tên) của lớp “K” thi môn CTRR không đạt (ở tất cả các lần thi).
+SELECT HV.MAHV, HV.HO, HV.TEN
+FROM HOCVIEN HV, KETQUATHI KQ
+WHERE KQ.MAHV = HV.MAHV	
+	AND KQ.MAMH = 'CTRR'
+	AND KQ.KQUA = 'Khong Dat'
+
+--6. Tìm tên những môn học mà giáo viên có tên “Tran Tam Thanh” dạy trong học kỳ 1 năm 2006.
+SELECT MH.TENMH
+FROM MONHOC MH, GIAOVIEN GV, GIANGDAY GD
+WHERE MH.MAMH = GD.MAMH
+	AND GD.MAGV = GV.MAGV
+	AND GV.HOTEN = 'Tran Tam Thanh'
+	AND GD.HOCKY = '1'
+	AND GD.NAM = '2006'
+GROUP BY MH.TENMH
+
+--7. Tìm những môn học (mã môn học, tên môn học) mà giáo viên chủ nhiệm lớp “K11” dạy trong học kỳ 1 năm 2006.
+SELECT MH.MAMH, MH.TENMH
+FROM MONHOC MH, GIANGDAY GD, LOP 
+WHERE MH.MAMH = GD.MAMH
+	AND GD.MALOP = LOP.MALOP
+	AND GD.MAGV = LOP.MAGVCN
+	AND LOP.MALOP = 'K11'
+	AND GD.HOCKY = '1'
+	AND GD.NAM = '2006'
+
+--8. Tìm họ tên lớp trưởng của các lớp mà giáo viên có tên “Nguyen To Lan” dạy môn “Co So Du Lieu”.
+SELECT HV.HO, HV.TEN
+FROM HOCVIEN HV, GIAOVIEN GV, GIANGDAY GD, MONHOC MH, LOP
+WHERE GV.HOTEN = 'Nguyen To Lan'
+	AND MH.TENMH = 'Co So Du Lieu'
+	AND GV.MAGV = GD.MAGV
+	AND GD.MAMH = MH.MAMH
+	AND GD.MALOP = LOP.MALOP
+	AND LOP.TRGLOP = HV.MAHV
+
+--9. In ra danh sách những môn học (mã môn học, tên môn học) phải học liền trước môn “Co So Du Lieu”.
+SELECT MONHOCTRUOC.MAMH, MONHOCTRUOC.TENMH
+FROM MONHOC MH, MONHOC AS MONHOCTRUOC, DIEUKIEN DK
+WHERE MH.TENMH = 'Co So Du Lieu'
+	AND MH.MAMH = DK.MAMH
+	AND MONHOCTRUOC.MAMH = DK.MAMH_TRUOC
+
+--10. Môn “Cau Truc Roi Rac” là môn bắt buộc phải học liền trước những môn học (mã môn học, tên môn học) nào
+SELECT MH.MAMH, MH.TENMH
+FROM MONHOC MH, MONHOC AS MONHOCTRUOC, DIEUKIEN DK
+WHERE MH.MAMH = DK.MAMH
+	AND MONHOCTRUOC.MAMH = DK.MAMH_TRUOC
+	AND MONHOCTRUOC.TENMH = 'Cau Truc Roi Rac'
