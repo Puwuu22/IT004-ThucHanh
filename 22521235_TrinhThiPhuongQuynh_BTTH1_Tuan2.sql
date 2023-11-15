@@ -277,8 +277,8 @@ WHERE KH.MAKH = HD.MAKH
 	AND CTHD.MASP = SP.MASP
 	AND CTHD.SOHD = HD.SOHD
 	AND KH.HOTEN = 'NGUYEN VAN A' 
-	AND MONTH(HD.NGHD) = 10 
-	AND YEAR(HD.NGHD) = 2006
+	AND MONTH(HD.NGHD) = '10'
+	AND YEAR(HD.NGHD) = '2006'
 
 --11. Tìm các số hóa đơn đã mua sản phẩm có mã số “BB01” hoặc “BB02”.
 SELECT SOHD
@@ -286,8 +286,199 @@ FROM CTHD
 WHERE MASP IN ('BB01', 'BB02')
 
 --12. Tìm các số hóa đơn đã mua sản phẩm có mã số “BB01” hoặc “BB02”, mỗi sản phẩm mua với số lượng từ 10 đến 20.
-SELECT SOHD
+SELECT DISTINCT SOHD
 FROM CTHD
 WHERE MASP IN('BB01', 'BB02')
 	AND SL BETWEEN 10 AND 20
 
+--13. Tìm các số hóa đơn mua cùng lúc 2 sản phẩm có mã số “BB01” và “BB02”, mỗi sản phẩm mua với số lượng từ 10 đến 20.
+SELECT SOHD
+FROM CTHD
+WHERE MASP = 'BB01'
+	AND SL BETWEEN 10 AND 20
+INTERSECT 
+SELECT SOHD
+FROM CTHD
+WHERE MASP = 'BB02'
+	AND SL BETWEEN 10 AND 20
+
+--14. In ra danh sách các sản phẩm (MASP,TENSP) do “Trung Quoc” sản xuất hoặc các sản phẩm được bán ra trong ngày 1/1/2007.
+SELECT DISTINCT SANPHAM.MASP, SANPHAM.TENSP
+FROM SANPHAM, HOADON, CTHD
+WHERE SANPHAM.MASP = CTHD.MASP
+	AND HOADON.SOHD = CTHD.SOHD
+	AND (SANPHAM.NUOCSX = 'TRUNGQUOC' OR HOADON.NGHD = '1/1/2007')
+
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE NUOCSX = 'TRUNGQUOC'
+UNION 
+SELECT SANPHAM.MASP, TENSP
+FROM SANPHAM, CTHD, HOADON
+WHERE SANPHAM.MASP = CTHD.MASP
+	AND CTHD.SOHD = HOADON.SOHD
+	AND HOADON.NGHD = '1/1/2007'
+--15. In ra danh sách các sản phẩm (MASP,TENSP) không bán được.
+SELECT MASP, TENSP
+FROM SANPHAM
+EXCEPT
+SELECT SANPHAM.MASP, SANPHAM.TENSP
+FROM SANPHAM, CTHD
+WHERE SANPHAM.MASP = CTHD.MASP
+
+
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE MASP NOT IN (
+    SELECT MASP
+    FROM CTHD
+)
+
+
+--16. In ra danh sách các sản phẩm (MASP,TENSP) không bán được trong năm 2006.
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE MASP NOT IN (
+    SELECT CTHD.MASP
+    FROM CTHD, HOADON
+    WHERE CTHD.SOHD = HOADON.SOHD
+        AND YEAR(HOADON.NGHD) = 2006
+)
+
+--17. In ra danh sách các sản phẩm (MASP,TENSP) do “Trung Quoc” sản xuất không bán được trong năm 2006.
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE NUOCSX = 'TRUNGQUOC'
+EXCEPT
+SELECT SANPHAM.MASP, TENSP
+FROM SANPHAM, HOADON,CTHD
+WHERE YEAR(HOADON.NGHD) = 2006
+	AND SANPHAM.MASP = CTHD.MASP
+	AND HOADON.SOHD = CTHD.SOHD
+	AND NUOCSX = 'TRUNGQUOC'
+
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE NUOCSX = 'TRUNGQUOC'
+	AND MASP NOT IN(
+		SELECT DISTINCT MASP
+		FROM HOADON, CTHD
+		WHERE SANPHAM.MASP = CTHD.MASP
+			AND CTHD.SOHD = HOADON.SOHD
+			AND YEAR(HOADON.NGHD) = '2006'
+			AND SANPHAM.NUOCSX = 'TRUNGQUOC'
+	)
+
+--20. Có bao nhiêu hóa đơn không phải của khách hàng đăng ký thành viên mua?
+SELECT COUNT(*) AS SOLUONG_KHONGTHANHVIEN
+FROM HOADON
+WHERE MAKH IS NULL
+
+--21. Có bao nhiêu sản phẩm khác nhau được bán ra trong năm 2006.
+SELECT DISTINCT COUNT(*) AS SOLUONG_SP_KHACNHAU
+FROM HOADON, CTHD
+WHERE YEAR(HOADON.NGHD) = '2006'
+	AND HOADON.SOHD = CTHD.SOHD
+
+--22. Cho biết trị giá hóa đơn cao nhất, thấp nhất là bao nhiêu ?
+SELECT MIN(TRIGIA) AS HOADON_THAPNHAT, MAX(TRIGIA) AS HOADON_CAONHAT
+FROM HOADON
+
+--23. Trị giá trung bình của tất cả các hóa đơn được bán ra trong năm 2006 là bao nhiêu?
+SELECT AVG(TRIGIA) AS TRIGIA_TRUNGBINH
+FROM HOADON
+WHERE YEAR(NGHD) = '2006'
+
+--24. Tính doanh thu bán hàng trong năm 2006.
+SELECT SUM(TRIGIA) AS DOANHTHU
+FROM HOADON
+WHERE YEAR(NGHD) = '2006'
+
+--25. Tìm số hóa đơn có trị giá cao nhất trong năm 2006.
+SELECT SOHD
+FROM HOADON
+WHERE TRIGIA = (
+	SELECT MAX(TRIGIA)
+	FROM HOADON
+	WHERE YEAR(NGHD) = '2006'
+	)
+
+--26. Tìm họ tên khách hàng đã mua hóa đơn có trị giá cao nhất trong năm 2006.
+SELECT HOTEN
+FROM KHACHHANG, HOADON
+WHERE KHACHHANG.MAKH = HOADON.MAKH
+	AND YEAR(NGHD) = '2006'
+	AND TRIGIA = (
+		SELECT MAX(TRIGIA)
+		FROM HOADON
+		WHERE YEAR(NGHD) = '2006'
+	)
+
+--27. In ra danh sách 3 khách hàng đầu tiên (MAKH, HOTEN) sắp xếp theo doanh số giảm dần.
+SELECT TOP 3 MAKH, HOTEN
+FROM KHACHHANG
+ORDER BY DOANHSO DESC
+
+--28. In ra danh sách các sản phẩm (MASP, TENSP) có giá bán bằng 1 trong 3 mức giá cao nhất.
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE GIA IN (
+	SELECT DISTINCT TOP 3 GIA
+	FROM SANPHAM
+	ORDER BY GIA DESC
+)
+
+--29. In ra danh sách các sản phẩm (MASP, TENSP) do “Thai Lan” sản xuất có giá bằng 1 trong 3 mức giá cao nhất (của tất cả các sản phẩm).
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE NUOCSX = 'THAILAN'
+	AND GIA IN (
+	SELECT DISTINCT TOP 3 GIA
+	FROM SANPHAM
+	ORDER BY GIA DESC
+)
+
+--30. In ra danh sách các sản phẩm (MASP, TENSP) do “Trung Quoc” sản xuất có giá bằng 1 trong 3 mức giá cao nhất (của sản phẩm do “Trung Quoc” sản xuất).
+SELECT MASP, TENSP
+FROM SANPHAM
+WHERE NUOCSX ='TRUNGQUOC'
+	AND GIA IN (
+	SELECT DISTINCT TOP 3 GIA
+	FROM SANPHAM
+	WHERE NUOCSX = 'TRUNGQUOC'
+	ORDER BY GIA DESC
+)
+
+--32. Tính tổng số sản phẩm do “Trung Quoc” sản xuất.
+SELECT COUNT(*) AS SOLUONG_SP_TRUNGQUOC
+FROM SANPHAM
+WHERE NUOCSX = 'TRUNGQUOC'
+
+--33. Tính tổng số sản phẩm của từng nước sản xuất.
+SELECT NUOCSX, COUNT(*) AS SOLUONG_SANPHAM
+FROM SANPHAM
+GROUP BY NUOCSX
+--34. Với từng nước sản xuất, tìm giá bán cao nhất, thấp nhất, trung bình của các sản phẩm.
+SELECT NUOCSX, MAX(GIA) AS GIABAN_CAONHAT, MIN(GIA) AS GIABAN_THAPNHAT, AVG(GIA) AS GIA_TRUNGBINH
+FROM SANPHAM
+GROUP BY NUOCSX
+
+--35. Tính doanh thu bán hàng mỗi ngày.
+SELECT NGHD, SUM(TRIGIA) AS DOANHTHU
+FROM HOADON
+GROUP BY NGHD
+
+--36. Tính tổng số lượng của từng sản phẩm bán ra trong tháng 10/2006.
+SELECT MASP, SUM(SL) AS TONGSOLUONG
+FROM HOADON, CTHD
+WHERE HOADON.SOHD = CTHD.SOHD
+	AND MONTH(HOADON.NGHD) = '10'
+	AND YEAR(HOADON.NGHD) = '2006'
+GROUP BY MASP
+
+
+--37. Tính doanh thu bán hàng của từng tháng trong năm 2006
+SELECT MONTH(NGHD) AS THANG, SUM(TRIGIA) AS DOANHTHU
+FROM HOADON
+WHERE YEAR(NGHD) = '2006'
+GROUP BY MONTH(NGHD)
