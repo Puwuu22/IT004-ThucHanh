@@ -84,7 +84,7 @@ INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('004', 'DT002', 10)
 
 --Câu 3. Thực hiện các truy vấn--
 --a.Cho biết tên phòng ban (TENPHG) có mức lương trung bình từ 24.000.000 trở lên, sắp xếp theo tên phòng ban giảm dần. (1.0 điểm)
-SELECT TENPHG
+SELECT TENPHG, AVG(LUONG) AS LUONG_TRUNGBINH
 FROM PHONGBAN, NHANVIEN
 WHERE NHANVIEN.MAPHG = PHONGBAN.MAPHG
 GROUP BY TENPHG
@@ -118,7 +118,30 @@ WHERE NV.MANV = PC.MANV
 	AND DA.MAPHG = PB.MAPHG
 	AND PB.TENPHG != 'NGHIEN CUU'
 
---e. Tìm h? tên (HOTEN) c?a các nhân viên làm vi?c cho t?t c? ?? án do phòng “Dieu Hanh”ch? trì. (1.0 ?i?m)
---f. Cho bi?t tên phòng ban cùng h? tên tr??ng phòng c?a phòng ban có ?ông nhân viên nh?t. (1.0 ?i?m)
+--e. Tìm họ tên (HOTEN) của các nhân viên làm việc cho tất cả đề án do phòng “Dieu Hanh” chủ trì. (1.0 điểm)
+	--tim cac nhan vien ma KHONG co de an nao cua ban DIEUHANH ma KHONG tham gia
 SELECT HOTEN 
-FROM NHANVIEN NV
+FROM NHANVIEN 
+WHERE NOT EXISTS (
+		SELECT*
+		FROM DEAN, PHONGBAN
+		WHERE DEAN.MAPHG = PHONGBAN.MAPHG
+			AND PHONGBAN.TENPHG = 'Dieu Hanh'
+			AND NOT EXISTS (
+				SELECT*
+				FROM PHANCONG
+				WHERE DEAN.MADA = PHANCONG.MADA
+					AND PHANCONG.MANV = NHANVIEN.MANV
+			)
+		)
+
+--f. Cho biết tên phòng ban cùng họ tên trưởng phòng của phòng ban có đông nhân viên nhất. 
+SELECT TENPHG, HOTEN
+FROM NHANVIEN, PHONGBAN
+WHERE PHONGBAN.TRPHG = NHANVIEN.MANV
+	AND NHANVIEN.MAPHG IN ( 
+		SELECT TOP 1 WITH TIES MAPHG
+		FROM NHANVIEN
+		GROUP BY MAPHG
+		ORDER BY COUNT(MANV) DESC
+	)
