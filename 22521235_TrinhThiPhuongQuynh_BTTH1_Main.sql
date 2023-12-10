@@ -74,6 +74,31 @@ ADD CONSTRAINT SP_GIA_CHECK CHECK(GIA > 500)
 ALTER TABLE CTHD
 ADD CONSTRAINT CTHD_SL_CHECK CHECK(SL > 1 OR SL = 1)
 
+--11. Ngày mua hàng (NGHD) của một khách hàng thành viên sẽ lớn hơn hoặc bằng ngày khách hàng đó đăng ký thành viên (NGDK).
+CREATE TRIGGER TRG_INS_HD ON HOADON
+FOR INSERT
+AS
+BEGIN
+	DECLARE @NGHD SMALLDATETIME, @MAKH CHAR(4), @NGDK SMALLDATETIME
+	SELECT @NGHD = NGHD, @MAKH = MAKH
+	FROM INSERTED
+	--Lay thong tin cua HOADON vua moi them vao
+	SELECT @NGDK = NGDK
+	FROM KHACHHANG
+	WHERE MAKH = @MAKH
+	--SO SANH
+	IF(@NGHD < @NGDK) 
+	BEGIN
+		PRINT 'LOI: NGAY HOA DON KHONG HOP LE'
+		ROLLBACK TRANSACTION
+	END
+	ELSE
+	BEGIN
+		PRINT 'THEM MOI MOT HOA DON THANH CONG'
+	END
+END
+
+
 --II. Ngôn ngữ thao tác dữ liệu (Data Manipulation Language):
 
 --1. Nhập dữ liệu cho các quan hệ trên.
@@ -224,6 +249,8 @@ hoặc khách hàng đăng ký thành viên từ 1/1/2007 trở về sau có doa
 UPDATE KHACHHANG1
 SET LOAIKH = 'Vip'
 WHERE (NGDK < '1/1/2007' AND DOANHSO >= 10000000) OR (NGDK > '1/1/2007' AND DOANHSO >= 2000000)
+
+--
 
 --III. Ngôn ngữ truy vấn dữ liệu:
 
