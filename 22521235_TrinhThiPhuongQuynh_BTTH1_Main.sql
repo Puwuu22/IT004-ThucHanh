@@ -74,18 +74,24 @@ ADD CONSTRAINT SP_GIA_CHECK CHECK(GIA > 500)
 ALTER TABLE CTHD
 ADD CONSTRAINT CTHD_SL_CHECK CHECK(SL > 1 OR SL = 1)
 
+--10. Ngày khách hàng đăng ký là khách hàng thành viên phải lớn hơn ngày sinh của người đó.
+ALTER TABLE KHACHHANG
+ADD CONSTRAINT KH_NGAY_CHECK CHECK(NGDK > NGSINH)
+
 --11. Ngày mua hàng (NGHD) của một khách hàng thành viên sẽ lớn hơn hoặc bằng ngày khách hàng đó đăng ký thành viên (NGDK).
 CREATE TRIGGER TRG_INS_HD ON HOADON
 FOR INSERT
 AS
 BEGIN
 	DECLARE @NGHD SMALLDATETIME, @MAKH CHAR(4), @NGDK SMALLDATETIME
+	
 	SELECT @NGHD = NGHD, @MAKH = MAKH
 	FROM INSERTED
-	--Lay thong tin cua HOADON vua moi them vao
+
 	SELECT @NGDK = NGDK
 	FROM KHACHHANG
 	WHERE MAKH = @MAKH
+
 	--SO SANH
 	IF(@NGHD < @NGDK) 
 	BEGIN
@@ -98,6 +104,125 @@ BEGIN
 	END
 END
 
+--12. Ngày bán hàng (NGHD) của một nhân viên phải lớn hơn hoặc bằng ngày nhân viên đó vào làm.
+CREATE TRIGGER TRG_CHECK_NGNV ON HOADON
+FOR INSERT, UPDATE
+AS 
+BEGIN
+	DECLARE @NGHD SMALLDATETIME, @NGVL SMALLDATETIME, @MANV CHAR(4)
+	
+	SELECT @NGHD = NGHD, @MANV = MANV
+	FROM INSERTED
+
+	SELECT @NGVL = NGVL
+	FROM NHANVIEN
+	WHERE @MANV = MANV
+
+	IF(@NGHD < @NGVL)
+	BEGIN 
+		PRINT 'LOI: NGAY HOA DON KHONG HOP LE'
+		ROLLBACK TRANSACTION
+	END
+
+	ELSE
+	BEGIN
+		PRINT 'THEM/CAP NHAT HOA DON THANH CONG'
+	END
+END
+		
+--13. Mỗi một hóa đơn phải có ít nhất một chi tiết hóa đơn.
+CREATE TRIGGER TRG_CHECK_HD_CTHD ON HOADON
+FOR INSERT
+AS
+BEGIN
+	DECLARE @SOHD INT
+
+	SELECT @SOHD = SOHD
+	FROM INSERTED
+
+	IF NOT EXISTS (SELECT 1 FROM CTHD WHERE SOHD = @SOHD)
+	BEGIN
+		PRINT 'LOI: MOI HOA DON PHAI CO IT NHAT MOT CHI TIET HOA DON'
+		ROLLBACK TRANSACTION
+	END
+	ELSE
+	BEGIN
+		PRINT 'HOA DON CO IT NHAT MOT CHI TIET HOA DON'
+	END
+END
+ 
+--14. Trị giá của một hóa đơn là tổng thành tiền (số lượng*đơn giá) của các chi tiết thuộc hóa đơn đó.
+CREATE TRIGGER TRG_UPDATE_TRIGIA ON CTHD
+FOR INSERT
+AS
+BEGIN
+	DECLARE @SOHD INT, @MASP CHAR(4), @SOLUONG INT, @TRIGIA MONEY
+	--Lấy thông tin của CTHD vừa mới được thêm vào
+	SELECT @SOHD = SOHD, @MASP = MASP, @SOLUONG = SL
+	FROM INSERTED
+	--Tính trị giá của sản phẩm mới được thêm vào HOADON
+	SET @TRIGIA = @SOLUONG * (SELECT GIA FROM SANPHAM WHERE MASP = @MASP)
+	--Khai báo một cursor duyệt qua tất cả các CTHD đã có sẵn trong HOADON
+	DECLARE CUR_CTHD CURSOR
+	FOR 
+		SELECT MASP, SL
+		FROM CTHD
+		WHERE SOHD = @SOHD
+
+	OPEN CUR_CTHD
+	FETCH NEXT FROM CUR_CTHD INTO @MASP, @SOLUONG
+
+	WHILE(@@FETCH_STATUS = 0)
+	BEGIN
+		--Cộng dồn trị giá của từng sản phẩm vào biến TRIGIA
+		SET @TRIGIA = @TRIGIA + @SOLUONG * (SELECT GIA FROM SANPHAM WHERE MASP = @MASP)
+		FETCH NEXT FROM CUR_CTHD
+		INTO @MASP, @SOLUONG
+	END
+
+	CLOSE CUR_CTHD
+	DEALLOCATE CUR_CTHD
+	--Tiến hành cập nhật lại trị giá hóa đơn
+	UPDATE HOADON SET TRIGIA = @TRIGIA WHERE SOHD = @SOHD
+END
+
+--15. Doanh số của một khách hàng là tổng trị giá các hóa đơn mà khách hàng thành viên đó đã mua.
+--(Cập nhật lại DOANHSO khi có một hóa đơn mới được thêm vào)
+CREATE TRIGGER TRG_UPDATE_DOANHSO ON HOADON
+FOR INSERT
+AS 
+BEGIN
+	DECLARE @MAKH CHAR(4), @SOHD INT, @TRIGIA MONEY, @DOANHSO MONEY
+
+	--Lấy thông tin của HOADON mới được thêm vào
+	SELECT @SOHD = SOHD, @TRIGIA =TRIGIA, @MAKH = MAKH
+	FROM INSERTED
+	
+	SET @DOANHSO = 0
+	--Khai báo một cursor để duyệt qua tất cả các TRIGIA hóa đơn của KHACHHANG
+	DECLARE CUR_HD CURSOR
+	FOR
+		SELECT TRIGIA
+		FROM HOADON
+		WHERE MAKH = @MAKH
+
+	OPEN CUR_HD
+	FETCH NEXT FROM  CUR_HD
+	INTO @TRIGIA
+
+	WHILE(@@FETCH_STATUS = 0)
+	BEGIN
+		--Cộng dồn trị giá của các hóa đơn vào doanh số
+		SET @DOANHSO = @DOANHSO + @TRIGIA
+		FETCH NEXT FROM CUR_HD
+		INTO @TRIGIA
+	END
+
+	CLOSE CUR_HD
+	DEALLOCATE CUR_HD
+
+	UPDATE KHACHHANG SET DOANHSO = @DOANHSO WHERE MAKH = @MAKH
+END
 
 --II. Ngôn ngữ thao tác dữ liệu (Data Manipulation Language):
 
@@ -490,6 +615,7 @@ WHERE NUOCSX = 'TRUNGQUOC'
 SELECT NUOCSX, COUNT(*) AS SOLUONG_SANPHAM
 FROM SANPHAM
 GROUP BY NUOCSX
+
 --34. Với từng nước sản xuất, tìm giá bán cao nhất, thấp nhất, trung bình của các sản phẩm.
 SELECT NUOCSX, MAX(GIA) AS GIABAN_CAONHAT, MIN(GIA) AS GIABAN_THAPNHAT, AVG(GIA) AS GIA_TRUNGBINH
 FROM SANPHAM
@@ -507,7 +633,6 @@ WHERE HOADON.SOHD = CTHD.SOHD
 	AND MONTH(HOADON.NGHD) = '10'
 	AND YEAR(HOADON.NGHD) = '2006'
 GROUP BY MASP
-
 
 --37. Tính doanh thu bán hàng của từng tháng trong năm 2006
 SELECT MONTH(NGHD) AS THANG, SUM(TRIGIA) AS DOANHTHU

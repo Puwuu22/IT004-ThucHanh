@@ -1,4 +1,4 @@
-﻿--Cài đặt lược đồ CSDL trên, khai báo khóa chính, khóa ngoại--
+﻿--Câu 1. Cài đặt lược đồ CSDL trên, khai báo khóa chính, khóa ngoại--
 CREATE TABLE NHANVIEN(
 	MANV VARCHAR(3) CONSTRAINT NV_MANV_PK PRIMARY KEY,
 	HOTEN VARCHAR(40) CONSTRAINT NV_HOTEN_NN NOT NULL,
@@ -52,25 +52,25 @@ ADD CONSTRAINT PHANCONG_MADA_FK FOREIGN KEY(MADA) REFERENCES DEAN(MADA)
 --Nhập dữ liệu cho các quan hệ trên.
 SET DATEFORMAT DMY 
 
--- Nhập dữ liệu cho bảng NHANVIEN
+--Nhập dữ liệu cho bảng NHANVIEN
 INSERT INTO NHANVIEN (MANV, HOTEN, NGSINH, PHAI, DIACHI, MAPHG, LUONG) VALUES ('001', 'Vuong Ngoc Quyen', '22/10/1977', 'Nu', '450 Trung Vuong, HaNoi', 'QL', 30000000)
 INSERT INTO NHANVIEN (MANV, HOTEN, NGSINH, PHAI, DIACHI, MAPHG, LUONG) VALUES ('002', 'Nguyen Thanh Tu', '09/01/1975', 'Nam', '731 Tran Hung Dao, Q1, TpHCM', 'NC', 25000000)
 INSERT INTO NHANVIEN (MANV, HOTEN, NGSINH, PHAI, DIACHI, MAPHG, LUONG) VALUES ('003', 'Le Thi Nhan', '18/12/1980', 'Nu', '291 Ho Van Hue, QPN, TpHCM', 'DH', 25000000)
 INSERT INTO NHANVIEN (MANV, HOTEN, NGSINH, PHAI, DIACHI, MAPHG, LUONG) VALUES ('004', 'Dinh Ba Tien', '09/01/1988', 'Nam', '638 Nguyen Van Cu, Q5, TpHCM', 'NC', 22000000)
 INSERT INTO NHANVIEN (MANV, HOTEN, NGSINH, PHAI, DIACHI, MAPHG, LUONG) VALUES ('005', 'Bui Thuy Vu', '19/07/1992', 'Nam', '332 Nguyen Thai Hoc, Q1, TpHCM', 'DH', 23000000)
 
--- Nhập dữ liệu cho bảng PHONGBAN
+--Nhập dữ liệu cho bảng PHONGBAN
 INSERT INTO PHONGBAN (MAPHG, TENPHG, TRPHG, NGNC) VALUES ('QL', 'Quan Ly', '001', '22/05/2018')
 INSERT INTO PHONGBAN (MAPHG, TENPHG, TRPHG, NGNC) VALUES ('DH', 'Dieu Hanh', '003', '10/10/2020')
 INSERT INTO PHONGBAN (MAPHG, TENPHG, TRPHG, NGNC) VALUES ('NC', 'Nghien Cuu', '002', '15/03/2020')
 
--- Nhập dữ liệu cho bảng DEAN
+--Nhập dữ liệu cho bảng DEAN
 INSERT INTO DEAN (MADA, TENDA, DDIEM_DA, MAPHG, NGBD_DK, NGKT_DK) VALUES ('TH001', 'Tin hoc hoa 1', 'HANOI', 'NC', '01/02/2018', '01/02/2019')
 INSERT INTO DEAN (MADA, TENDA, DDIEM_DA, MAPHG, NGBD_DK, NGKT_DK) VALUES ('TH002', 'Tin hoc hoa 2', 'TPHCM', 'NC', '04/06/2018', '01/02/2019')
 INSERT INTO DEAN (MADA, TENDA, DDIEM_DA, MAPHG, NGBD_DK, NGKT_DK) VALUES ('DT001', 'Dao tao 1', 'NHATRANG', 'DH', '01/02/2017', '01/02/2021')
 INSERT INTO DEAN (MADA, TENDA, DDIEM_DA, MAPHG, NGBD_DK, NGKT_DK) VALUES ('DT002', 'Dao tao 2', 'HANOI', 'DH', '01/02/2017', '01/02/2021')
 
--- Nhập dữ liệu cho bảng PHANCONG
+--Nhập dữ liệu cho bảng PHANCONG
 INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('001', 'TH001', 30)
 INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('001', 'TH002', 12)
 INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('002', 'TH001', 10)
@@ -82,6 +82,42 @@ INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('004', 'DT001', 22)
 INSERT INTO PHANCONG (MANV, MADA, THOIGIAN) VALUES ('004', 'DT002', 10)
 
 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+--Câu 2. (1.5 điểm) Hiện thực ràng buộc toàn vẹn 
+--a. Nhân viên phòng “NC” phải có lương lớn hơn 20.000.000. (0.5 điểm)
+ALTER TABLE NHANVIEN
+ADD CONSTRAINT LUONG_NC_CHECK CHECK (MAPHG != 'NC' OR (MAPHG = 'NC' AND LUONG > 20000000))
+
+--b. Nhân viên chỉ được phân công vào các đề án có ngày dự kiến bắt đầu thực hiện đề án (NGBD_DK) lớn hơn ngày sinh của nhân viên đó (NGSINH). (1.0 điểm)
+CREATE TRIGGER TRG_PHANCONG_DEAN ON PHANCONG
+FOR INSERT
+AS
+BEGIN
+	DECLARE @MANV VARCHAR(3), @MADA VARCHAR(5), @NGBD_DK SMALLDATETIME, @NGSINH SMALLDATETIME
+
+	SELECT @MANV = MANV, @MADA = MADA
+	FROM INSERTED
+
+	SELECT @NGSINH = NGSINH
+	FROM NHANVIEN
+	WHERE MANV = @MANV
+
+	SELECT @NGBD_DK = NGBD_DK
+	FROM DEAN
+	WHERE MADA = @MADA
+
+	IF(@NGBD_DK <= @NGSINH)
+		BEGIN
+			PRINT 'LOI: NGAY BAT DAU DE AN PHAI LON HON NGAY SINH'
+			ROLLBACK TRANSACTION
+		END
+	ELSE
+		BEGIN
+			PRINT 'PHAN CONG DE AN NHAN VIEN THANH CONG'
+		END
+END
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
 --Câu 3. Thực hiện các truy vấn--
 --a.Cho biết tên phòng ban (TENPHG) có mức lương trung bình từ 24.000.000 trở lên, sắp xếp theo tên phòng ban giảm dần. (1.0 điểm)
 SELECT TENPHG, AVG(LUONG) AS LUONG_TRUNGBINH
